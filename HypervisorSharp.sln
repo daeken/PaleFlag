@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HypervisorSharp", "HypervisorSharp\HypervisorSharp.csproj", "{E130F8C3-B078-41B5-AA36-88377A7C94EE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PaleFlag", "PaleFlag\PaleFlag.csproj", "{B59ECC79-56E2-49C2-AD7B-D14DE99464EC}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E130F8C3-B078-41B5-AA36-88377A7C94EE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E130F8C3-B078-41B5-AA36-88377A7C94EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E130F8C3-B078-41B5-AA36-88377A7C94EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E130F8C3-B078-41B5-AA36-88377A7C94EE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B59ECC79-56E2-49C2-AD7B-D14DE99464EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B59ECC79-56E2-49C2-AD7B-D14DE99464EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B59ECC79-56E2-49C2-AD7B-D14DE99464EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B59ECC79-56E2-49C2-AD7B-D14DE99464EC}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
