@@ -5,15 +5,13 @@ using static System.Console;
 
 namespace PaleFlag {
 	public unsafe class CpuCore {
-		const uint PagetableAddr = 0xC0000000;
-		const uint GdtAddr = 0xC0500000;
+		const uint PagetableAddr = 0xF0000000;
+		const uint GdtAddr = 0xF0500000;
 		
 		readonly HvMac Hv = new HvMac();
 		readonly HvMacVcpu Cpu;
-		readonly byte* PhysMem, PagetableBase, GdtBase;
+		readonly byte* PagetableBase, GdtBase;
 		
-		public Span<T> Physical<T>(uint offset) => new Span<T>(PhysMem + offset, (int) (64 * 1024 * 1024 - offset));
-
 		public uint this[HvReg reg] {
 			get => (uint) Cpu[reg];
 			set => Cpu[reg] = value;
@@ -59,7 +57,6 @@ namespace PaleFlag {
 			Cpu[HvVmcsField.GUEST_LDTR_AR] = 0x10000;
 			Cpu[HvVmcsField.GUEST_TR_AR] = 0x83;
 
-			PhysMem = Hv.Map(0, 64 * 1024 * 1024, HvMemoryFlags.RWX);
 			PagetableBase = Hv.Map(PagetableAddr, 4 * 1024 * 1024 + 4 * 1024, HvMemoryFlags.RW);
 			GdtBase = Hv.Map(GdtAddr, 64 * 1024, HvMemoryFlags.RW);
 			
@@ -108,6 +105,10 @@ namespace PaleFlag {
 			Cpu[HvReg.CR4] = 0x2000;
 		}
 
+		public byte* CreatePhysicalPages(uint addr, int count) {
+			return Hv.Map(addr, (ulong) (count * 16 * 1024 * 1024), HvMemoryFlags.RWX);
+		}
+
 		public void MapPages(uint virt, uint phys, uint count, bool present) {
 			Debug.Assert(Cpu[HvReg.CR3] == PagetableAddr);
 			var dir = (uint*) PagetableBase;
@@ -115,11 +116,19 @@ namespace PaleFlag {
 				var tableOff = dir[virt >> 22] & 0xFFFFF000;
 				Debug.Assert(tableOff > PagetableAddr && tableOff < PagetableAddr + 5 * 1024 * 1024);
 				var table = (uint*) (PagetableBase + (tableOff - PagetableAddr));
-				table[(virt >> 12) & 0x3FF] = (uint) (phys | 0x6 | (present ? 1 : 0));
+				table[(virt >> 12) & 0x3FF] = phys | 0x6U | (present ? 1U : 0U);
 				virt += 4096;
 				phys += 4096;
 			}
 			Cpu.InvalidateTlb();
+		}
+
+		public bool IsMapped(uint addr) {
+			Debug.Assert(Cpu[HvReg.CR3] == PagetableAddr);
+			var dir = (uint*) PagetableBase;
+			var tableOff = dir[addr >> 22] & 0xFFFFF000;
+			var table = (uint*) (PagetableBase + (tableOff - PagetableAddr));
+			return (table[(addr >> 12) & 0x3FF] & 1) == 1;
 		}
 
 		public uint Virt2Phys(uint addr) {
@@ -146,6 +155,12 @@ namespace PaleFlag {
 
 			var reason = (HvExitReason) _reason;
 			WriteLine($"Exited with {reason}");
+
+			switch(reason) {
+				case HvExitReason.EXC_NMI:
+					Environment.Exit(0);
+					break;
+			}
 			
 			WriteLine($"Exiting {Cpu[HvReg.RIP]:X}");
 		}
