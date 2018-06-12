@@ -1,9 +1,9 @@
 ﻿using System;
 
-namespace PaleFlag.Kernel {
-	public class Threads : IKernel {
-		[Kernel(0xFF)]
-		static NtStatus PsCreateSystemThreadEx(
+namespace PaleFlag.XboxKernel {
+	public partial class Kernel {
+		[Export(0xFF)]
+		NtStatus PsCreateSystemThreadEx(
 			GuestMemory<uint> threadHandle, uint threadExtraSize, uint kernelStackSize, uint tlsDataSize, GuestMemory<uint> threadId, 
 			uint startContext1, uint startContext2, bool createSuspended, bool debugStack, uint startRoutine
 		) {

@@ -5,38 +5,31 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using HypervisorSharp;
-using static System.Console;
 
-namespace PaleFlag {
-	class KernelAttribute : Attribute {
+namespace PaleFlag.XboxKernel {
+	class ExportAttribute : Attribute {
 		public readonly int Number;
 
-		public KernelAttribute(int number) => Number = number;
-	}
-
-	public interface IKernel {
+		public ExportAttribute(int number) => Number = number;
 	}
 	
-	public static class KernelSetup {
-		public static readonly Dictionary<int, Action<CpuCore>> Functions = new Dictionary<int, Action<CpuCore>>();
+	public partial class Kernel {
+		readonly CpuCore Cpu;
+		public static readonly Dictionary<int, Action> Functions = new Dictionary<int, Action>();
 		
-		public static void Setup() {
-			var asm = typeof(IKernel).Assembly;
-			foreach(var type in asm.GetTypes()) {
-				if(!type.GetInterfaces().Contains(typeof(IKernel)))
+		public Kernel(CpuCore cpu) {
+			Cpu = cpu;
+			foreach(var method in typeof(Kernel).GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)) {
+				var attr = method.GetCustomAttribute<ExportAttribute>();
+				if(attr == null)
 					continue;
-				foreach(var method in type.GetMethods(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)) {
-					var attr = method.GetCustomAttribute<KernelAttribute>();
-					if(attr == null)
-						continue;
-					Functions[attr.Number] = MakeWrapper(method);
-				}
+				Functions[attr.Number] = MakeWrapper(method);
 			}
 		}
-	
-		static Action<CpuCore> MakeWrapper(MethodInfo method) {
+		
+		Action MakeWrapper(MethodInfo method) {
 			var toStructure = typeof(Marshal).GetMethod("PtrToStructure", new[] { typeof(IntPtr) });
-			var paramBuilders = method.GetParameters().Select<ParameterInfo, Func<CpuCore, object>>(param => {
+			var paramBuilders = method.GetParameters().Select<ParameterInfo, Func<object>>(param => {
 				var spec = toStructure.MakeGenericMethod(param.ParameterType);
 				Func<IntPtr, object> caller = ptr => spec.Invoke(null, new object[] { ptr });
 				if(param.ParameterType.IsGenericType &&
@@ -46,27 +39,27 @@ namespace PaleFlag {
 							Marshal.PtrToStructure<uint>(ptr));
 
 				var size = Extensions.SizeOf(param.ParameterType);
-				return cpu => {
-					var sp = cpu[HvReg.RSP];
+				return () => {
+					var sp = Cpu[HvReg.RSP];
 					var data = PageManager.Instance.Read(sp, size);
 					var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
 					var ret = caller(handle.AddrOfPinnedObject());
 					handle.Free();
-					cpu[HvReg.RSP] = sp + (uint) size;
+					Cpu[HvReg.RSP] = sp + (uint) size;
 					return ret;
 				};
 			}).ToArray();
 			var numParams = paramBuilders.Length;
 			var iparams = new object[numParams];
 			if(method.ReturnType == typeof(void))
-				return cpu => {
-					var sp = cpu[HvReg.RSP];
-					cpu[HvReg.RSP] = sp + 4;
+				return () => {
+					var sp = Cpu[HvReg.RSP];
+					Cpu[HvReg.RSP] = sp + 4;
 					var retAddr = new GuestMemory<uint>(sp).Value;
 					for(var i = 0; i < numParams; ++i)
-						iparams[i] = paramBuilders[i](cpu);
-					method.Invoke(null, iparams);
-					cpu[HvReg.RIP] = retAddr;
+						iparams[i] = paramBuilders[i]();
+					method.Invoke(this, iparams);
+					Cpu[HvReg.RIP] = retAddr;
 				};
 			else {
 				var retType = method.ReturnType;
@@ -74,17 +67,17 @@ namespace PaleFlag {
 				Debug.Assert(size == 4);
 				var ptr = Marshal.AllocHGlobal(size);
 				var arr = new byte[size];
-				return cpu => {
-					var sp = cpu[HvReg.RSP];
-					cpu[HvReg.RSP] = sp + 4;
+				return () => {
+					var sp = Cpu[HvReg.RSP];
+					Cpu[HvReg.RSP] = sp + 4;
 					var retAddr = new GuestMemory<uint>(sp).Value;
 					for(var i = 0; i < numParams; ++i)
-						iparams[i] = paramBuilders[i](cpu);
-					var ret = method.Invoke(null, iparams);
+						iparams[i] = paramBuilders[i]();
+					var ret = method.Invoke(this, iparams);
 					Marshal.StructureToPtr(ret.GetType().IsEnum ? Convert.ChangeType(ret, Enum.GetUnderlyingType(ret.GetType())) : ret, ptr, true);
 					Marshal.Copy(ptr, arr, 0, size);
-					cpu[HvReg.RAX] = BitConverter.ToUInt32(arr, 0);
-					cpu[HvReg.RIP] = retAddr;
+					Cpu[HvReg.RAX] = BitConverter.ToUInt32(arr, 0);
+					Cpu[HvReg.RIP] = retAddr;
 				};
 			}
 		}

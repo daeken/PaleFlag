@@ -66,8 +66,8 @@ namespace PaleFlag {
 			WriteLine($"File at {Header.Base:X} - {Header.Base + Data.Length:X}");
 			WriteLine($"Actual virtual top is {highest:X}");
 			foreach(var section in Sections) {
-				var name = Encoding.ASCII.GetString(Data, (int) (section.NameAddr - Header.Base), 8);
-				WriteLine($"- ${name} {section.VAddr:X} {section.VSize:X} -- {section.RAddr:X} {section.RSize:X}");
+				var name = Encoding.ASCII.GetString(Data, (int) (section.NameAddr - Header.Base), 24).Split('\0')[0];
+				WriteLine($"- {name} {section.VAddr:X} {section.VSize:X} -- {section.RAddr:X} {section.RSize:X}");
 				PageManager.Instance.Write(section.VAddr, Data.Skip((int) section.RAddr).Take((int) section.RSize).ToArray());
 			}
 

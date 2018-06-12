@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using HypervisorSharp;
+using PaleFlag.XboxKernel;
 using static System.Console;
 
 namespace PaleFlag {
@@ -11,6 +12,8 @@ namespace PaleFlag {
 		readonly HvMac Hv = new HvMac();
 		readonly HvMacVcpu Cpu;
 		readonly byte* PagetableBase, GdtBase;
+
+		readonly Kernel Kernel;
 		
 		public uint this[HvReg reg] {
 			get => (uint) Cpu[reg];
@@ -19,6 +22,7 @@ namespace PaleFlag {
 		
 		public CpuCore() {
 			Cpu = Hv.CreateVcpu();
+			Kernel = new Kernel(this);
 
 			ulong Cap2Ctrl(ulong cap, uint ctrl) => (ctrl | (cap & 0xffffffff)) & (cap >> 32);
 
@@ -183,9 +187,9 @@ namespace PaleFlag {
 					break;
 				case HvExitReason.VMCALL:
 					var call = (int) (Cpu[HvReg.RIP] - Xbox.KernelCallsBase) / 4;
-					WriteLine($"Kernel call 0x{call:X}");
-					var func = KernelSetup.Functions[call];
-					func(this);
+					if(!Kernel.Functions.ContainsKey(call))
+						throw new Exception($"Unimplemented kernel function 0x{call:X} - {(KernelExportNames) call}");
+					Kernel.Functions[call]();
 					break;
 			}
 		}

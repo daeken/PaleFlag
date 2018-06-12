@@ -1,4 +1,4 @@
-﻿namespace PaleFlag.Kernel {
+﻿namespace PaleFlag.XboxKernel {
 	public enum NtStatus {
 		Success = 0
 	}

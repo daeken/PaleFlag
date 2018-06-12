@@ -28,7 +28,6 @@ namespace PaleFlag {
 			for(var i = 0; i < 400; ++i)
 				ptr[i] = 0xccc1010f; // vmcall; int 3 // latter should never be hit
 			Cpu.MapPages(KernelCallsBase, KernelCallsBase, 1, true);
-			KernelSetup.Setup();
 		}
 
 		public void Start() => Cpu.Run();
