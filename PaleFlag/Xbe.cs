@@ -1,5 +1,7 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using static System.Console;
@@ -47,11 +49,38 @@ namespace PaleFlag {
 			}
 		}
 
-		public void Load(CpuCore cpu) {
-			for(var i = 0; i < Sections.Length; ++i) {
-				var name = Encoding.ASCII.GetString(Data, (int) (Sections[i].NameAddr - Header.Base), 8);
-				WriteLine($"");
+		public uint Load(CpuCore cpu) {
+			var highest = new[] { Header.Base + (uint) Data.Length }.Concat(Sections.Select(x => x.VAddr + x.VSize)).Aggregate(Math.Max);
+			if((highest & 0xFFF) != 0)
+				highest = (highest & 0xFFFFF000) + 0x1000;
+
+			var tmp = Header.Oep ^ 0xA8FC57ABU;
+			var retail = tmp >= Header.Base && tmp < highest;
+			
+			var pages = (int) (highest / 4096);
+			var phys = PageManager.Instance.AllocPhysPages(pages);
+			var virt = PageManager.Instance.AllocVirtPages(pages, at: Header.Base);
+			cpu.MapPages(virt, phys, pages, true);
+			WriteLine($"Physical at {phys:X} virt at {virt:X}");
+			PageManager.Instance.Write(Header.Base, Data);
+			WriteLine($"File at {Header.Base:X} - {Header.Base + Data.Length:X}");
+			WriteLine($"Actual virtual top is {highest:X}");
+			foreach(var section in Sections) {
+				var name = Encoding.ASCII.GetString(Data, (int) (section.NameAddr - Header.Base), 8);
+				WriteLine($"- ${name} {section.VAddr:X} {section.VSize:X} -- {section.RAddr:X} {section.RSize:X}");
+				PageManager.Instance.Write(section.VAddr, Data.Skip((int) section.RAddr).Take((int) section.RSize).ToArray());
 			}
+
+			var thunk = Header.Thunk ^ (retail ? 0x5B6D40B6U : 0xEFB1F152U);
+			for(var i = 0U; i < 400; ++i) {
+				var addr = new GuestMemory<uint>(thunk + i * 4);
+				var cur = addr.Value;
+				if(cur == 0)
+					break;
+				addr.Value = Xbox.KernelCallsBase + (cur & 0x1FF) * 4;
+			}
+
+			return Header.Oep ^ (retail ? 0xA8FC57ABU : 0x94859D4B);
 		}
 	}
 }

@@ -9,5 +9,13 @@ namespace PaleFlag {
 			gch.Free();
 			return data;
 		}
+
+		public static int SizeOf(Type type) {
+			if(type.IsGenericType && type.GetGenericTypeDefinition() == typeof(GuestMemory<>))
+				return 4;
+			else if(type.IsEnum)
+				return 4;
+			return Marshal.SizeOf(type);
+		}
 	}
 }

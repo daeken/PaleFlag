@@ -486,6 +486,9 @@ namespace HypervisorSharp {
 			var ptr = (ulong) Marshal.AllocHGlobal((IntPtr) size + 4095);
 			if((ptr & 0xFFF) != 0)
 				ptr += 0x1000 - (ptr & 0xFFF);
+			/*var tmp = (uint*) ptr;
+			for(var i = 0; i < (uint) size / 4; i++)
+				tmp[i] = 0x90c1010fU;*/
 			return (byte*) ptr;
 		}
 

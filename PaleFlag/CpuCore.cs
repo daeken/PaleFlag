@@ -101,6 +101,7 @@ namespace PaleFlag {
 			GdtEncode(0, 0, 0, 0);
 			GdtEncode(1, 0, 0xFFFFFFFF, 0x9A);
 			GdtEncode(2, 0, 0xFFFFFFFF, 0x92);
+			MapPages(GdtAddr, GdtAddr, 16, true);
 
 			Cpu[HvReg.CR4] = 0x2000;
 		}
@@ -109,13 +110,14 @@ namespace PaleFlag {
 			return Hv.Map(addr, (ulong) (count * 16 * 1024 * 1024), HvMemoryFlags.RWX);
 		}
 
-		public void MapPages(uint virt, uint phys, uint count, bool present) {
+		public void MapPages(uint virt, uint phys, int count, bool present) {
 			Debug.Assert(Cpu[HvReg.CR3] == PagetableAddr);
 			var dir = (uint*) PagetableBase;
 			for(var i = 0; i < count; ++i) {
 				var tableOff = dir[virt >> 22] & 0xFFFFF000;
 				Debug.Assert(tableOff > PagetableAddr && tableOff < PagetableAddr + 5 * 1024 * 1024);
 				var table = (uint*) (PagetableBase + (tableOff - PagetableAddr));
+				//WriteLine($"Setting {virt:X} to map to {phys:X}");
 				table[(virt >> 12) & 0x3FF] = phys | 0x6U | (present ? 1U : 0U);
 				virt += 4096;
 				phys += 4096;
@@ -154,15 +156,38 @@ namespace PaleFlag {
 				throw new Exception($"Failed to enter: {_reason:X8}");
 
 			var reason = (HvExitReason) _reason;
-			WriteLine($"Exited with {reason}");
+			if(reason == HvExitReason.IRQ || reason == HvExitReason.EPT_VIOLATION)
+				return;
+			var qual = (uint) Cpu[HvVmcsField.RO_EXIT_QUALIFIC];
+			var insnLen = (uint) Cpu[HvVmcsField.RO_VMEXIT_INSTR_LEN];
+			WriteLine($"Exited with {reason} at {Cpu[HvReg.RIP]:X}");
 
 			switch(reason) {
 				case HvExitReason.EXC_NMI:
+					var vecVal = Cpu[HvVmcsField.RO_VMEXIT_IRQ_INFO] & 0xFFFFU;
+					var errorCode = Cpu[HvVmcsField.RO_VMEXIT_IRQ_ERROR];
+					switch((vecVal >> 8) & 7) {
+						case 6:
+							WriteLine($"Interrupt {vecVal & 0xFF}");
+							break;
+						case 3:
+							WriteLine($"Exception {vecVal & 0xFF}");
+							break;
+						default:
+							WriteLine($"Unknown NMI {vecVal:X}");
+							break;
+					}
 					Environment.Exit(0);
 					break;
+				case HvExitReason.EPT_VIOLATION:
+					break;
+				case HvExitReason.VMCALL:
+					var call = (int) (Cpu[HvReg.RIP] - Xbox.KernelCallsBase) / 4;
+					WriteLine($"Kernel call 0x{call:X}");
+					var func = KernelSetup.Functions[call];
+					func(this);
+					break;
 			}
-			
-			WriteLine($"Exiting {Cpu[HvReg.RIP]:X}");
 		}
 	}
 }
