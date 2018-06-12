@@ -8,17 +8,22 @@ namespace PaleFlag {
 		
 		public readonly CpuCore Cpu;
 		public readonly PageManager PageManager;
+		public readonly HandleManager HandleManager = new HandleManager();
+		public readonly ThreadManager ThreadManager;
+		public readonly MemoryAllocator MemoryAllocator;
 		
 		public Xbox(string fn) {
+			ThreadManager = new ThreadManager(this);
+			MemoryAllocator = new MemoryAllocator(this);
+			
 			Cpu = new CpuCore { [HvReg.RFLAGS] = 2 };
 			PageManager = new PageManager(Cpu);
 
 			var xbe = new Xbe(fn);
 			Cpu[HvReg.RIP] = xbe.Load(Cpu);
 
-			var sp = PageManager.AllocVirtPages(8);
-			Cpu.MapPages(sp, PageManager.AllocPhysPages(8), 8, true);
-			Cpu[HvReg.RSP] = sp + 8 * 4096;
+			var sp = MemoryAllocator.Allocate(32768);
+			Cpu[HvReg.RSP] = sp + 32768;
 
 			SetupKernelThunk();
 		}
