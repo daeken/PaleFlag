@@ -4,7 +4,7 @@ namespace PaleFlag.Kernel {
 	public class Threads : IKernel {
 		[Kernel(0xFF)]
 		static NtStatus PsCreateSystemThreadEx(
-			GuestMemory<IntPtr> threadHandle, uint threadExtraSize, uint kernelStackSize, uint tlsDataSize, GuestMemory<uint> threadId, 
+			GuestMemory<uint> threadHandle, uint threadExtraSize, uint kernelStackSize, uint tlsDataSize, GuestMemory<uint> threadId, 
 			uint startContext1, uint startContext2, bool createSuspended, bool debugStack, uint startRoutine
 		) {
 			Console.WriteLine($"PsCreateSystemThreadEx");
