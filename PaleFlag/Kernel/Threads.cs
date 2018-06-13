@@ -1,7 +1,17 @@
 ﻿using System;
+using System.Runtime.InteropServices;
 
 namespace PaleFlag.XboxKernel {
 	public partial class Kernel {
+		[StructLayout(LayoutKind.Sequential)]
+		struct RtlCriticalSection {
+			[MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)]
+			public uint[] Unknown;
+
+			public int LockCount, RecursionCount;
+			public uint OwningThread;
+		}
+		
 		[Export(0xFF)]
 		NtStatus PsCreateSystemThreadEx(
 			GuestMemory<uint> threadHandle, uint threadExtraSize, uint kernelStackSize, uint tlsDataSize, GuestMemory<uint> threadId, 
@@ -21,6 +31,29 @@ namespace PaleFlag.XboxKernel {
 			
 			Tib.Create(Box, thread);
 
+			return NtStatus.Success;
+		}
+
+		[Export(0x123)]
+		NtStatus RtlInitializeCriticalSection(GuestMemory<RtlCriticalSection> crit) {
+			if(crit.Value.Unknown[0] == 0xDEADBEEF)
+				return NtStatus.Success;
+			crit.Value = new RtlCriticalSection {
+				Unknown = new[] { 0xDEADBEEFU, 0U, 0U, 0U }, 
+				LockCount = -1, 
+				RecursionCount = 0, 
+				OwningThread = Box.ThreadManager.Current.Id
+			};
+			return NtStatus.Success;
+		}
+
+		[Export(0x115)]
+		NtStatus RtlEnterCriticalSection(GuestMemory<RtlCriticalSection> crit) {
+			return NtStatus.Success;
+		}
+		
+		[Export(0x126)]
+		NtStatus RtlLeaveCriticalSection(GuestMemory<RtlCriticalSection> crit) {
 			return NtStatus.Success;
 		}
 	}

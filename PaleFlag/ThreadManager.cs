@@ -17,7 +17,7 @@ namespace PaleFlag {
 		readonly Xbox Box;
 		readonly CpuCore Cpu;
 		readonly Queue<Thread> Running = new Queue<Thread>();
-		Thread Current;
+		public Thread Current;
 		uint ThreadIter;
 
 		public ThreadManager(Xbox box) {

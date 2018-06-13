@@ -7,5 +7,9 @@ namespace PaleFlag.XboxKernel {
 			Console.WriteLine("HalReturnToFirmware");
 			Environment.Exit(0);
 		}
+
+		[Export(0x2F)]
+		void HalRegisterShutdownNotification(uint shutdownRegistration, bool register) {
+		}
 	}
 }

@@ -31,10 +31,24 @@ namespace PaleFlag {
 			ThreadManager.Add(ep, MemoryAllocator.Allocate(32768) + 32768);
 
 			SetupKernelThunk();
+			SetupHack();
 			
 			guest<ushort>(0x6f5e7).Value = 0xfeeb;
 			//guest<byte>(0x74A2F).Value = 0xcc;
 			//guest<uint>(0x6F577).Value = 0xcc01010f;
+		}
+
+		void SetupHack() {
+			// Some XBEs appear to try to patch kernel stuff,
+			// but this hack is enough to terminate that safely
+
+			var phys = PageManager.AllocPhysPages(1);
+			var virt = PageManager.AllocVirtPages(1, at: 0x80010000);
+			Cpu.MapPages(virt, phys, 1, true);
+
+			var hack = new GuestMemory<uint>(virt);
+			var hack2 = MemoryAllocator.Allocate(0x20);
+			hack[0x3c / 4] = unchecked(hack2 + 0x7FFF0000);
 		}
 
 		unsafe void SetupKernelThunk() {
