@@ -121,7 +121,7 @@ namespace PaleFlag {
 		}
 
 		public void DumpRegs() {
-			var regs = new[] { HvReg.RAX, HvReg.RBX, HvReg.RCX, HvReg.RDX, HvReg.RSP, HvReg.RBP, HvReg.RSI, HvReg.RDI, HvReg.RIP, HvReg.RFLAGS, HvReg.CS, HvReg.DS, HvReg.FS };
+			var regs = new[] { HvReg.RAX, HvReg.RBX, HvReg.RCX, HvReg.RDX, HvReg.RSP, HvReg.RBP, HvReg.RSI, HvReg.RDI, HvReg.RIP, HvReg.RFLAGS };
 			foreach(var reg in regs)
 				WriteLine($"- {reg} == {(uint) Cpu[reg]:X8}");
 		}

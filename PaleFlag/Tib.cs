@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using static PaleFlag.Globals;
 #pragma warning disable 414
 #pragma warning disable 169
 #pragma warning disable 649
@@ -58,19 +59,19 @@ namespace PaleFlag {
 			while((tlsAddr & 0xF) != 0)
 				tlsAddr++;
 			tlsAddr -= 4;
+			Console.WriteLine($"TLS is at {tlsAddr:X}-{tlsAddr + copy + box.Tls.TlsZerofill:X}");
 			var tls = new GuestMemory<byte>(tlsAddr);
 			var gtls = new GuestMemory<byte>(box.Tls.TlsStart);
 			for(var i = 0; i < copy; ++i)
 				tls[i] = gtls[i];
 			for(var i = 0; i < box.Tls.TlsZerofill; ++i)
 				tls[(int) copy + i] = 0;
-			
-			var ethread = new GuestMemory<Ethread>(box.MemoryAllocator.Allocate((uint) Marshal.SizeOf<Ethread>())) {
-				Value = new Ethread { UniqueThread = thread.Id, Kthread = new Kthread { TlsData = tlsAddr } }
-			};
-			var tib = new GuestMemory<Kpcr>(box.MemoryAllocator.Allocate((uint) Marshal.SizeOf<Kpcr>()));
+
+			var ethread =
+				box.New(new Ethread { UniqueThread = thread.Id, Kthread = new Kthread { TlsData = tlsAddr } });
+			var tib = box.New<Kpcr>();
 			tib.Value = new Kpcr {
-				NtTib = new NtTib { StackBase = /*thread.Esp - 32768*/ tlsAddr, Self = tib }, 
+				NtTib = new NtTib { StackBase = tlsAddr, Self = tib }, 
 				Self = tib, 
 				Prcb = tib + 0x28, 
 				PrcbData = new Kprcb {
@@ -78,6 +79,8 @@ namespace PaleFlag {
 				}
 			};
 			Debug.Assert(tib.Value.NtTib.Self == tib);
+			
+			guest<uint>(box.Tls.TlsIndexAddr).Value = 0; // XXX: HUGE HACK
 
 			thread.Tib = tib;
 		}

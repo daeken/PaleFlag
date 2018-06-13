@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.InteropServices;
 using HypervisorSharp;
 using PaleFlag.XboxKernel;
 using static System.Console;
@@ -15,7 +16,7 @@ namespace PaleFlag {
 		public readonly ThreadManager ThreadManager;
 		public readonly MemoryAllocator MemoryAllocator;
 
-		public readonly (uint TlsStart, uint TlsEnd, uint TlsZerofill) Tls;
+		public readonly (uint TlsStart, uint TlsEnd, uint TlsZerofill, uint TlsIndexAddr) Tls;
 		
 		public Xbox(string fn) {
 			Cpu = new CpuCore(this);
@@ -25,8 +26,8 @@ namespace PaleFlag {
 			PageManager = new PageManager(Cpu);
 
 			var xbe = new Xbe(fn);
-			var (ep, tlsStart, tlsEnd, tlsZerofill) = xbe.Load(Cpu);
-			Tls = (tlsStart, tlsEnd, tlsZerofill);
+			var (ep, tlsStart, tlsEnd, tlsZerofill, tlsIndexAddr) = xbe.Load(Cpu);
+			Tls = (tlsStart, tlsEnd, tlsZerofill, tlsIndexAddr);
 
 			ThreadManager.Add(ep, MemoryAllocator.Allocate(32768) + 32768);
 
@@ -34,7 +35,7 @@ namespace PaleFlag {
 			SetupHack();
 			
 			guest<ushort>(0x6f5e7).Value = 0xfeeb;
-			//guest<byte>(0x74A2F).Value = 0xcc;
+			//guest<byte>(0x000701F6).Value = 0xcc;
 			//guest<uint>(0x6F577).Value = 0xcc01010f;
 		}
 
@@ -55,6 +56,9 @@ namespace PaleFlag {
 			var ptr = (uint*) Cpu.CreatePhysicalPages(KernelCallsBase, 1);
 			for(var i = 0; i < 400; ++i)
 				ptr[i] = 0xccc1010f; // vmcall; int 3 // latter should never be hit
+			var launchDataPage = MemoryAllocator.Allocate(0x3400);
+			WriteLine($"Launch data page at {launchDataPage:X}");
+			ptr[0xa4] = launchDataPage;
 			Cpu.MapPages(KernelCallsBase, KernelCallsBase, 1, true);
 		}
 
@@ -62,5 +66,10 @@ namespace PaleFlag {
 			ThreadManager.Next();
 			Cpu.Run();
 		}
+
+		public GuestMemory<T> New<T>() where T : struct =>
+			new GuestMemory<T>(MemoryAllocator.Allocate((uint) Marshal.SizeOf<T>()));
+		public GuestMemory<T> New<T>(T value) where T : struct =>
+			new GuestMemory<T>(MemoryAllocator.Allocate((uint) Marshal.SizeOf<T>())) { Value = value };
 	}
 }

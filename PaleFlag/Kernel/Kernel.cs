@@ -7,6 +7,10 @@ using System.Runtime.InteropServices;
 using HypervisorSharp;
 
 namespace PaleFlag.XboxKernel {
+	public enum Kobject {
+		DpcObject = 0x13
+	}
+	
 	class ExportAttribute : Attribute {
 		public readonly int Number;
 
@@ -39,6 +43,8 @@ namespace PaleFlag.XboxKernel {
 					caller = ptr => 
 						Activator.CreateInstance(typeof(GuestMemory<>).MakeGenericType(param.ParameterType.GenericTypeArguments[0]), 
 							Marshal.PtrToStructure<uint>(ptr));
+				else if(param.ParameterType.IsEnum)
+					caller = ptr => Enum.ToObject(param.ParameterType, Marshal.PtrToStructure(ptr, Enum.GetUnderlyingType(param.ParameterType)));
 
 				var size = Extensions.SizeOf(param.ParameterType);
 				return () => {
@@ -62,6 +68,7 @@ namespace PaleFlag.XboxKernel {
 						iparams[i] = paramBuilders[i]();
 					method.Invoke(this, iparams);
 					Cpu[HvReg.RIP] = retAddr;
+					Console.WriteLine($"Returning to {retAddr:X}");
 				};
 			else {
 				var retType = method.ReturnType;
@@ -80,6 +87,7 @@ namespace PaleFlag.XboxKernel {
 					Marshal.Copy(ptr, arr, 0, size);
 					Cpu[HvReg.RAX] = BitConverter.ToUInt32(arr, 0);
 					Cpu[HvReg.RIP] = retAddr;
+					Console.WriteLine($"Returning to {retAddr:X}");
 				};
 			}
 		}

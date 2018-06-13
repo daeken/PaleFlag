@@ -2,7 +2,7 @@
 
 namespace PaleFlag {
 	public struct GuestMemory<T> where T : struct {
-		public readonly uint GuestAddr;
+		public uint GuestAddr;
 
 		public GuestMemory(uint addr) => GuestAddr = addr;
 
@@ -18,6 +18,8 @@ namespace PaleFlag {
 		
 		public static implicit operator GuestMemory<T>(uint addr) => new GuestMemory<T>(addr);
 		public static implicit operator uint(GuestMemory<T> gm) => gm.GuestAddr;
+
+		public static implicit operator bool(GuestMemory<T> gm) => gm.GuestAddr != 0;
 	}
 
 	public class GuestMemoryWrapper<T> where T : struct {

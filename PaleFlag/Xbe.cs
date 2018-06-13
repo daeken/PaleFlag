@@ -51,8 +51,9 @@ namespace PaleFlag {
 			Tls = Data.ToStruct<XbeTls>((int) (Header.Tls - Header.Base));
 		}
 
-		public (uint EntryPoint, uint TlsStart, uint TlsEnd, uint TlsZerofill) Load(CpuCore cpu) {
+		public (uint EntryPoint, uint TlsStart, uint TlsEnd, uint TlsZerofill, uint TlsIndexAddr) Load(CpuCore cpu) {
 			var highest = new[] { Header.Base + (uint) Data.Length }.Concat(Sections.Select(x => x.VAddr + x.VSize)).Aggregate(Math.Max);
+			var lowest = new[] { Header.Base + (uint) Data.Length }.Concat(Sections.Select(x => x.VAddr)).Aggregate(Math.Min);
 			if((highest & 0xFFF) != 0)
 				highest = (highest & 0xFFFFF000) + 0x1000;
 
@@ -64,7 +65,7 @@ namespace PaleFlag {
 			var virt = PageManager.Instance.AllocVirtPages(pages, at: Header.Base);
 			cpu.MapPages(virt, phys, pages, true);
 			WriteLine($"Physical at {phys:X} virt at {virt:X}");
-			PageManager.Instance.Write(Header.Base, Data);
+			PageManager.Instance.Write(Header.Base, Data.Take((int) (lowest - Header.Base)).ToArray());
 			WriteLine($"File at {Header.Base:X} - {Header.Base + Data.Length:X}");
 			WriteLine($"Actual virtual top is {highest:X}");
 			foreach(var section in Sections) {
@@ -82,7 +83,7 @@ namespace PaleFlag {
 				addr.Value = Xbox.KernelCallsBase + (cur & 0x1FF) * 4;
 			}
 			
-			return (Header.Oep ^ (retail ? 0xA8FC57ABU : 0x94859D4B), Tls.DataStart, Tls.DataEnd, Tls.ZeroFill);
+			return (Header.Oep ^ (retail ? 0xA8FC57ABU : 0x94859D4B), Tls.DataStart, Tls.DataEnd, Tls.ZeroFill, Tls.Index);
 		}
 	}
 }
