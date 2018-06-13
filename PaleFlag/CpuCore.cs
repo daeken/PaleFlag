@@ -7,22 +7,26 @@ using static System.Console;
 namespace PaleFlag {
 	public unsafe class CpuCore {
 		const uint PagetableAddr = 0xF0000000;
-		const uint GdtAddr = 0xF0500000;
 		
 		readonly HvMac Hv = new HvMac();
 		readonly HvMacVcpu Cpu;
-		readonly byte* PagetableBase, GdtBase;
+		readonly byte* PagetableBase;
 
-		readonly Kernel Kernel;
+		readonly Xbox Box;
 		
 		public uint this[HvReg reg] {
 			get => (uint) Cpu[reg];
 			set => Cpu[reg] = value;
 		}
+
+		public uint this[HvVmcsField field] {
+			get => (uint) Cpu[field];
+			set => Cpu[field] = value;
+		}
 		
-		public CpuCore() {
+		public CpuCore(Xbox box) {
+			Box = box;
 			Cpu = Hv.CreateVcpu();
-			Kernel = new Kernel(this);
 
 			ulong Cap2Ctrl(ulong cap, uint ctrl) => (ctrl | (cap & 0xffffffff)) & (cap >> 32);
 
@@ -47,6 +51,18 @@ namespace PaleFlag {
 			Cpu[HvVmcsField.CTRL_CR0_SHADOW] = 0xFFFFFFFF;
 			Cpu[HvVmcsField.CTRL_CR4_MASK] = 0xFFFFFFFF;
 			Cpu[HvVmcsField.CTRL_CR4_SHADOW] = 0xFFFFFFFF;
+
+			Cpu[HvVmcsField.GUEST_LDTR] = Cpu[HvVmcsField.GUEST_TR] = 0;
+			Cpu[HvVmcsField.GUEST_LDTR_LIMIT] = Cpu[HvVmcsField.GUEST_TR_LIMIT] = 0;
+			Cpu[HvVmcsField.GUEST_LDTR_BASE] = Cpu[HvVmcsField.GUEST_TR_BASE] = 0;
+			Cpu[HvVmcsField.GUEST_LDTR_AR] = 0x10000;
+			Cpu[HvVmcsField.GUEST_TR_AR] = 0x83;
+			
+			Cpu[HvReg.CR4] = 0x2000;
+
+			PagetableBase = Hv.Map(PagetableAddr, 4 * 1024 * 1024 + 4 * 1024, HvMemoryFlags.RWX);
+			
+			SetupPagetable();
 			
 			SetSegment(HvVmcsField.GUEST_CS, HvVmcsField.GUEST_CS_AR, HvVmcsField.GUEST_CS_LIMIT, HvVmcsField.GUEST_CS_BASE);
 			SetSegment(HvVmcsField.GUEST_DS, HvVmcsField.GUEST_DS_AR, HvVmcsField.GUEST_DS_LIMIT, HvVmcsField.GUEST_DS_BASE);
@@ -54,40 +70,9 @@ namespace PaleFlag {
 			SetSegment(HvVmcsField.GUEST_FS, HvVmcsField.GUEST_FS_AR, HvVmcsField.GUEST_FS_LIMIT, HvVmcsField.GUEST_FS_BASE);
 			SetSegment(HvVmcsField.GUEST_GS, HvVmcsField.GUEST_GS_AR, HvVmcsField.GUEST_GS_LIMIT, HvVmcsField.GUEST_GS_BASE);
 			SetSegment(HvVmcsField.GUEST_SS, HvVmcsField.GUEST_SS_AR, HvVmcsField.GUEST_SS_LIMIT, HvVmcsField.GUEST_SS_BASE);
-
-			Cpu[HvVmcsField.GUEST_LDTR] = Cpu[HvVmcsField.GUEST_TR] = 0;
-			Cpu[HvVmcsField.GUEST_LDTR_LIMIT] = Cpu[HvVmcsField.GUEST_TR_LIMIT] = 0;
-			Cpu[HvVmcsField.GUEST_LDTR_BASE] = Cpu[HvVmcsField.GUEST_TR_BASE] = 0;
-			Cpu[HvVmcsField.GUEST_LDTR_AR] = 0x10000;
-			Cpu[HvVmcsField.GUEST_TR_AR] = 0x83;
-
-			PagetableBase = Hv.Map(PagetableAddr, 4 * 1024 * 1024 + 4 * 1024, HvMemoryFlags.RW);
-			GdtBase = Hv.Map(GdtAddr, 64 * 1024, HvMemoryFlags.RW);
-			
-			SetupPagetable();
 		}
 		
 		void SetupPagetable() {
-			void GdtEncode(int entry, uint @base, uint limit, byte type) {
-				var gdt = GdtBase + entry * 8;
-				if(limit > 65536) {
-					limit >>= 12;
-					gdt[6] = 0xc0;
-				} else
-					gdt[6] = 0x40;
-
-				gdt[0] = (byte) (limit & 0xFF);
-				gdt[1] = (byte) ((limit >> 8) & 0xFF);
-				gdt[6] |= (byte) ((limit >> 16) & 0xF);
-
-				gdt[2] = (byte) (@base & 0xFF);
-				gdt[3] = (byte) ((@base >> 8) & 0xFF);
-				gdt[4] = (byte) ((@base >> 16) & 0xFF);
-				gdt[7] = (byte) ((@base >> 24) & 0xFF);
-
-				gdt[5] = type;
-			}
-			
 			var dir = (uint*) PagetableBase;
 			for(var i = 0; i < 1024; ++i) {
 				dir[i] = (uint) ((PagetableAddr + 4096 * (i + 1)) | 7);
@@ -98,16 +83,6 @@ namespace PaleFlag {
 
 			Cpu[HvReg.CR3] = PagetableAddr;
 			Cpu[HvReg.CR0] = 0x80000000 | 0x20 | 0x01;
-
-			Cpu[HvReg.GDT_BASE] = GdtAddr;
-			Cpu[HvReg.GDT_LIMIT] = 0xFFFF;
-			
-			GdtEncode(0, 0, 0, 0);
-			GdtEncode(1, 0, 0xFFFFFFFF, 0x9A);
-			GdtEncode(2, 0, 0xFFFFFFFF, 0x92);
-			MapPages(GdtAddr, GdtAddr, 16, true);
-
-			Cpu[HvReg.CR4] = 0x2000;
 		}
 
 		public byte* CreatePhysicalPages(uint addr, int count) {
@@ -144,7 +119,13 @@ namespace PaleFlag {
 			var table = (uint*) (PagetableBase + (tableOff - PagetableAddr));
 			return (table[(addr >> 12) & 0x3FF] & 0xFFFFF000) | (addr & 0xFFF);
 		}
-		
+
+		public void DumpRegs() {
+			var regs = new[] { HvReg.RAX, HvReg.RBX, HvReg.RCX, HvReg.RDX, HvReg.RSP, HvReg.RBP, HvReg.RSI, HvReg.RDI, HvReg.RIP, HvReg.RFLAGS, HvReg.CS, HvReg.DS, HvReg.FS };
+			foreach(var reg in regs)
+				WriteLine($"- {reg} == {(uint) Cpu[reg]:X8}");
+		}
+
 		public void Run() {
 			while(true)
 				Enter();
@@ -152,7 +133,7 @@ namespace PaleFlag {
 
 		void Enter() {
 			WriteLine($"Entering {Cpu[HvReg.RIP]:X}");
-			
+
 			Cpu.Enter();
 
 			var _reason = Cpu[HvVmcsField.RO_EXIT_REASON];
@@ -160,7 +141,11 @@ namespace PaleFlag {
 				throw new Exception($"Failed to enter: {_reason:X8}");
 
 			var reason = (HvExitReason) _reason;
-			if(reason == HvExitReason.IRQ || reason == HvExitReason.EPT_VIOLATION)
+			if(reason == HvExitReason.IRQ) {
+				Box.ThreadManager.Next();
+				return;
+			}
+			if(reason == HvExitReason.EPT_VIOLATION)
 				return;
 			var qual = (uint) Cpu[HvVmcsField.RO_EXIT_QUALIFIC];
 			var insnLen = (uint) Cpu[HvVmcsField.RO_VMEXIT_INSTR_LEN];
@@ -181,15 +166,20 @@ namespace PaleFlag {
 							WriteLine($"Unknown NMI {vecVal:X}");
 							break;
 					}
+					DumpRegs();
 					Environment.Exit(0);
 					break;
 				case HvExitReason.EPT_VIOLATION:
 					break;
 				case HvExitReason.VMCALL:
 					var call = (int) (Cpu[HvReg.RIP] - Xbox.KernelCallsBase) / 4;
-					if(!Kernel.Functions.ContainsKey(call))
-						throw new Exception($"Unimplemented kernel function 0x{call:X} - {(KernelExportNames) call}");
-					Kernel.Functions[call]();
+					WriteLine($"Kernel call to {(KernelExportNames) call}");
+					if(!Box.Kernel.Functions.ContainsKey(call)) {
+						WriteLine($"Unimplemented kernel function 0x{call:X} - {(KernelExportNames) call}");
+						Environment.Exit(0);
+					}
+
+					Box.Kernel.Functions[call]();
 					break;
 			}
 		}

@@ -37,6 +37,7 @@ namespace PaleFlag {
 		readonly byte[] Data;
 		readonly XbeHeader Header;
 		readonly XbeSection[] Sections;
+		readonly XbeTls Tls;
 		
 		public Xbe(string fn) {
 			Data = File.ReadAllBytes(fn);
@@ -44,12 +45,13 @@ namespace PaleFlag {
 			Debug.Assert(Header.Magic == 0x48454258);
 			
 			Sections = new XbeSection[Header.NumSects];
-			for(var i = 0; i < Header.NumSects; ++i) {
+			for(var i = 0; i < Header.NumSects; ++i)
 				Sections[i] = Data.ToStruct<XbeSection>((int) (Header.SectHdrs - Header.Base + i * Marshal.SizeOf<XbeSection>()));
-			}
+
+			Tls = Data.ToStruct<XbeTls>((int) (Header.Tls - Header.Base));
 		}
 
-		public uint Load(CpuCore cpu) {
+		public (uint EntryPoint, uint TlsStart, uint TlsEnd, uint TlsZerofill) Load(CpuCore cpu) {
 			var highest = new[] { Header.Base + (uint) Data.Length }.Concat(Sections.Select(x => x.VAddr + x.VSize)).Aggregate(Math.Max);
 			if((highest & 0xFFF) != 0)
 				highest = (highest & 0xFFFFF000) + 0x1000;
@@ -79,8 +81,8 @@ namespace PaleFlag {
 					break;
 				addr.Value = Xbox.KernelCallsBase + (cur & 0x1FF) * 4;
 			}
-
-			return Header.Oep ^ (retail ? 0xA8FC57ABU : 0x94859D4B);
+			
+			return (Header.Oep ^ (retail ? 0xA8FC57ABU : 0x94859D4B), Tls.DataStart, Tls.DataEnd, Tls.ZeroFill);
 		}
 	}
 }

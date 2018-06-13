@@ -1,31 +1,40 @@
 ﻿using System;
 using HypervisorSharp;
+using PaleFlag.XboxKernel;
 using static System.Console;
+using static PaleFlag.Globals;
 
 namespace PaleFlag {
 	public class Xbox {
 		public const uint KernelCallsBase = 0xFF000000U;
 		
 		public readonly CpuCore Cpu;
+		public readonly Kernel Kernel;
 		public readonly PageManager PageManager;
 		public readonly HandleManager HandleManager = new HandleManager();
 		public readonly ThreadManager ThreadManager;
 		public readonly MemoryAllocator MemoryAllocator;
+
+		public readonly (uint TlsStart, uint TlsEnd, uint TlsZerofill) Tls;
 		
 		public Xbox(string fn) {
+			Cpu = new CpuCore(this);
+			Kernel = new Kernel(this);
 			ThreadManager = new ThreadManager(this);
 			MemoryAllocator = new MemoryAllocator(this);
-			
-			Cpu = new CpuCore { [HvReg.RFLAGS] = 2 };
 			PageManager = new PageManager(Cpu);
 
 			var xbe = new Xbe(fn);
-			Cpu[HvReg.RIP] = xbe.Load(Cpu);
+			var (ep, tlsStart, tlsEnd, tlsZerofill) = xbe.Load(Cpu);
+			Tls = (tlsStart, tlsEnd, tlsZerofill);
 
-			var sp = MemoryAllocator.Allocate(32768);
-			Cpu[HvReg.RSP] = sp + 32768;
+			ThreadManager.Add(ep, MemoryAllocator.Allocate(32768) + 32768);
 
 			SetupKernelThunk();
+			
+			guest<ushort>(0x6f5e7).Value = 0xfeeb;
+			//guest<byte>(0x74A2F).Value = 0xcc;
+			//guest<uint>(0x6F577).Value = 0xcc01010f;
 		}
 
 		unsafe void SetupKernelThunk() {
@@ -35,6 +44,9 @@ namespace PaleFlag {
 			Cpu.MapPages(KernelCallsBase, KernelCallsBase, 1, true);
 		}
 
-		public void Start() => Cpu.Run();
+		public void Start() {
+			ThreadManager.Next();
+			Cpu.Run();
+		}
 	}
 }

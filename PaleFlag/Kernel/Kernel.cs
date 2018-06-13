@@ -14,11 +14,13 @@ namespace PaleFlag.XboxKernel {
 	}
 	
 	public partial class Kernel {
+		readonly Xbox Box;
 		readonly CpuCore Cpu;
-		public static readonly Dictionary<int, Action> Functions = new Dictionary<int, Action>();
+		public readonly Dictionary<int, Action> Functions = new Dictionary<int, Action>();
 		
-		public Kernel(CpuCore cpu) {
-			Cpu = cpu;
+		public Kernel(Xbox box) {
+			Box = box;
+			Cpu = box.Cpu;
 			foreach(var method in typeof(Kernel).GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)) {
 				var attr = method.GetCustomAttribute<ExportAttribute>();
 				if(attr == null)

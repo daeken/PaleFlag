@@ -7,9 +7,20 @@ namespace PaleFlag.XboxKernel {
 			GuestMemory<uint> threadHandle, uint threadExtraSize, uint kernelStackSize, uint tlsDataSize, GuestMemory<uint> threadId, 
 			uint startContext1, uint startContext2, bool createSuspended, bool debugStack, uint startRoutine
 		) {
-			Console.WriteLine($"PsCreateSystemThreadEx");
-			Console.WriteLine($"\t{threadHandle.GuestAddr:X} {threadExtraSize:X} {kernelStackSize:X} {tlsDataSize:X} {threadId.GuestAddr:X}");
-			Console.WriteLine($"\t{startContext1:X} {startContext2:X} {createSuspended} {debugStack} {startRoutine:X}");
+			var sp = Box.MemoryAllocator.Allocate(32768) + 32768;
+			sp -= 12;
+			new GuestMemory<uint>(sp) {
+				[0] = 0xDEADBEEFU,
+				[1] = startContext1,
+				[2] = startContext2
+			};
+			var thread = Box.ThreadManager.Add(startRoutine, sp);
+			thread.Ebp = sp + 4;
+			threadHandle.Value = Box.HandleManager.Add(thread);
+			if(threadId.GuestAddr != 0) threadId.Value = thread.Id;
+			
+			Tib.Create(Box, thread);
+
 			return NtStatus.Success;
 		}
 	}

@@ -15,5 +15,19 @@ namespace PaleFlag {
 			get => PageManager.Instance.Read<T>((uint) (GuestAddr + Marshal.SizeOf<T>() * index));
 			set => PageManager.Instance.Write((uint) (GuestAddr + Marshal.SizeOf<T>() * index), value);
 		}
+		
+		public static implicit operator GuestMemory<T>(uint addr) => new GuestMemory<T>(addr);
+		public static implicit operator uint(GuestMemory<T> gm) => gm.GuestAddr;
+	}
+
+	public class GuestMemoryWrapper<T> where T : struct {
+		GuestMemory<T> Guest;
+
+		public GuestMemoryWrapper(uint addr) => Guest = new GuestMemory<T>(addr);
+
+		public T Value {
+			get => Guest.Value;
+			set => Guest.Value = value;
+		}
 	}
 }
