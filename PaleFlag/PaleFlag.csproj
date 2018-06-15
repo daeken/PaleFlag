@@ -6,6 +6,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\GdbStub\GdbStub.csproj" />
     <ProjectReference Include="..\HypervisorSharp\HypervisorSharp.csproj" />
   </ItemGroup>
   <ItemGroup>

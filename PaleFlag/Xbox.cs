@@ -37,6 +37,8 @@ namespace PaleFlag {
 			guest<ushort>(0x6f5e7).Value = 0xfeeb;
 			//guest<byte>(0x000701F6).Value = 0xcc;
 			//guest<uint>(0x6F577).Value = 0xcc01010f;
+
+			Cpu.SetupDebugger();
 		}
 
 		void SetupHack() {

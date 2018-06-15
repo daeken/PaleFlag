@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using HypervisorSharp;
 
 namespace PaleFlag {
@@ -19,6 +20,8 @@ namespace PaleFlag {
 		readonly Queue<Thread> Running = new Queue<Thread>();
 		public Thread Current;
 		uint ThreadIter;
+
+		public Dictionary<uint, string> Threads => Running.Concat(new[] { Current }).Where(x => x != null).ToDictionary(x => x.Id, x => "Running");
 
 		public ThreadManager(Xbox box) {
 			Box = box;

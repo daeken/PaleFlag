@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HypervisorSharp", "Hypervis
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PaleFlag", "PaleFlag\PaleFlag.csproj", "{B59ECC79-56E2-49C2-AD7B-D14DE99464EC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GdbStub", "GdbStub\GdbStub.csproj", "{6B2820BC-B185-467D-807D-5654FC55D2CB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{B59ECC79-56E2-49C2-AD7B-D14DE99464EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B59ECC79-56E2-49C2-AD7B-D14DE99464EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B59ECC79-56E2-49C2-AD7B-D14DE99464EC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6B2820BC-B185-467D-807D-5654FC55D2CB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6B2820BC-B185-467D-807D-5654FC55D2CB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6B2820BC-B185-467D-807D-5654FC55D2CB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6B2820BC-B185-467D-807D-5654FC55D2CB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

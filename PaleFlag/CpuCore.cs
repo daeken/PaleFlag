@@ -1,17 +1,22 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Net;
+using GdbStub;
 using HypervisorSharp;
 using PaleFlag.XboxKernel;
 using static System.Console;
 
 namespace PaleFlag {
-	public unsafe class CpuCore {
+	public unsafe class CpuCore : IDebugTarget {
 		const uint PagetableAddr = 0xF0000000;
 		
 		readonly HvMac Hv = new HvMac();
 		readonly HvMacVcpu Cpu;
 		readonly byte* PagetableBase;
 
+		Gdb<CpuCore> Gdb;
 		readonly Xbox Box;
 		
 		public uint this[HvReg reg] {
@@ -71,7 +76,9 @@ namespace PaleFlag {
 			SetSegment(HvVmcsField.GUEST_GS, HvVmcsField.GUEST_GS_AR, HvVmcsField.GUEST_GS_LIMIT, HvVmcsField.GUEST_GS_BASE);
 			SetSegment(HvVmcsField.GUEST_SS, HvVmcsField.GUEST_SS_AR, HvVmcsField.GUEST_SS_LIMIT, HvVmcsField.GUEST_SS_BASE);
 		}
-		
+
+		public void SetupDebugger() => Gdb = new Gdb<CpuCore>(this, new IPEndPoint(IPAddress.Any, 12345));
+
 		void SetupPagetable() {
 			var dir = (uint*) PagetableBase;
 			for(var i = 0; i < 1024; ++i) {
@@ -127,61 +134,150 @@ namespace PaleFlag {
 		}
 
 		public void Run() {
-			while(true)
+			if(Gdb == null)
 				Enter();
+			else
+				Gdb.Run();
 		}
 
 		void Enter() {
-			WriteLine($"Entering {Cpu[HvReg.RIP]:X}");
+			while(true) {
+				WriteLine($"Entering {Cpu[HvReg.RIP]:X}");
 
-			Cpu.Enter();
+				Cpu.Enter();
 
-			var _reason = Cpu[HvVmcsField.RO_EXIT_REASON];
-			if((_reason & 0x80000000) != 0)
-				throw new Exception($"Failed to enter: {_reason:X8}");
+				var _reason = Cpu[HvVmcsField.RO_EXIT_REASON];
+				if((_reason & 0x80000000) != 0)
+					throw new Exception($"Failed to enter: {_reason:X8}");
 
-			var reason = (HvExitReason) _reason;
-			if(reason == HvExitReason.IRQ) {
-				Box.ThreadManager.Next();
-				return;
-			}
-			if(reason == HvExitReason.EPT_VIOLATION)
-				return;
-			var qual = (uint) Cpu[HvVmcsField.RO_EXIT_QUALIFIC];
-			var insnLen = (uint) Cpu[HvVmcsField.RO_VMEXIT_INSTR_LEN];
-			WriteLine($"Exited with {reason} at {Cpu[HvReg.RIP]:X}");
+				var reason = (HvExitReason) _reason;
+				if(reason == HvExitReason.IRQ) {
+					Box.ThreadManager.Next();
+					continue;
+				}
 
-			switch(reason) {
-				case HvExitReason.EXC_NMI:
-					var vecVal = Cpu[HvVmcsField.RO_VMEXIT_IRQ_INFO] & 0xFFFFU;
-					var errorCode = Cpu[HvVmcsField.RO_VMEXIT_IRQ_ERROR];
-					switch((vecVal >> 8) & 7) {
-						case 6:
-							WriteLine($"Interrupt {vecVal & 0xFF}");
-							break;
-						case 3:
-							WriteLine($"Exception {vecVal & 0xFF}");
-							break;
-						default:
-							WriteLine($"Unknown NMI {vecVal:X}");
-							break;
-					}
-					DumpRegs();
-					Environment.Exit(0);
-					break;
-				case HvExitReason.EPT_VIOLATION:
-					break;
-				case HvExitReason.VMCALL:
-					var call = (int) (Cpu[HvReg.RIP] - Xbox.KernelCallsBase) / 4;
-					WriteLine($"Kernel call to {(KernelExportNames) call}");
-					if(!Box.Kernel.Functions.ContainsKey(call)) {
-						WriteLine($"Unimplemented kernel function 0x{call:X} - {(KernelExportNames) call}");
+				if(reason == HvExitReason.EPT_VIOLATION)
+					continue;
+				var qual = (uint) Cpu[HvVmcsField.RO_EXIT_QUALIFIC];
+				var insnLen = (uint) Cpu[HvVmcsField.RO_VMEXIT_INSTR_LEN];
+				WriteLine($"Exited with {reason} at {Cpu[HvReg.RIP]:X}");
+
+				switch(reason) {
+					case HvExitReason.EXC_NMI:
+						var vecVal = Cpu[HvVmcsField.RO_VMEXIT_IRQ_INFO] & 0xFFFFU;
+						var errorCode = Cpu[HvVmcsField.RO_VMEXIT_IRQ_ERROR];
+						switch((vecVal >> 8) & 7) {
+							case 6:
+								var interrupt = vecVal & 0xFF;
+								WriteLine($"Interrupt {interrupt}");
+								if(interrupt == 3 && Gdb != null) {
+									Trapped?.Invoke(TrapType.Breakpoint);
+									return;
+								}
+								break;
+							case 3:
+								var exc = vecVal & 0xFF;
+								WriteLine($"Exception {exc}");
+								if(exc == 1 && Gdb != null) {
+									Trapped?.Invoke(TrapType.SingleStep);
+								}
+								break;
+							default:
+								WriteLine($"Unknown NMI {vecVal:X}");
+								break;
+						}
+
+						DumpRegs();
+
+						if(Gdb != null) {
+							Trapped?.Invoke(TrapType.Segfault);
+							return;
+						}
+
 						Environment.Exit(0);
-					}
+						break;
+					case HvExitReason.EPT_VIOLATION:
+						break;
+					case HvExitReason.VMCALL:
+						var call = (int) (Cpu[HvReg.RIP] - Xbox.KernelCallsBase) / 4;
+						WriteLine($"Kernel call to {(KernelExportNames) call}");
+						if(!Box.Kernel.Functions.ContainsKey(call)) {
+							WriteLine($"Unimplemented kernel function 0x{call:X} - {(KernelExportNames) call}");
+							Environment.Exit(0);
+						}
 
-					Box.Kernel.Functions[call]();
-					break;
+						Box.Kernel.Functions[call]();
+						break;
+				}
 			}
 		}
+
+
+		public event DebugTrap Trapped;
+		public int RegisterSize => 32;
+		public RegisterSet Registers => X86RegisterSet.Instance;
+
+		public ulong this[string reg] {
+			get {
+				switch(reg) {
+					case "EIP": return Cpu[HvReg.RIP];
+					case "EAX": return Cpu[HvReg.RAX];
+					case "EBX": return Cpu[HvReg.RBX];
+					case "ECX": return Cpu[HvReg.RCX];
+					case "EDX": return Cpu[HvReg.RDX];
+					case "ESI": return Cpu[HvReg.RSI];
+					case "EDI": return Cpu[HvReg.RDI];
+					case "ESP": return Cpu[HvReg.RSP];
+					case "EBP": return Cpu[HvReg.RBP];
+					case "EFLAGS": return Cpu[HvReg.RFLAGS];
+					case "CS": return Cpu[HvReg.CS];
+					case "DS": return Cpu[HvReg.DS];
+					case "ES": return Cpu[HvReg.ES];
+					case "FS": return Cpu[HvReg.FS];
+					case "GS": return Cpu[HvReg.GS];
+					case "SS": return Cpu[HvReg.SS];
+				}
+				WriteLine($"Unknown register requested: {reg}");
+				throw new NotImplementedException();
+			}
+			set => throw new NotImplementedException();
+		}
+
+		public uint ThreadId { get => Box.ThreadManager.Current.Id; set => throw new NotImplementedException(); }
+		public Dictionary<uint, string> Threads => Box.ThreadManager.Threads;
+
+		public byte[] ReadMemory(ulong addr, uint size) {
+			var gm = new GuestMemory<byte>((uint) addr);
+			return Enumerable.Range(0, (int) size).Select(i => gm[i]).ToArray();
+		}
+
+		public void WriteMemory(ulong addr, byte[] data) {
+			var gm = new GuestMemory<byte>((uint) addr);
+			for(var i = 0; i < data.Length; ++i)
+				gm[i] = data[i];
+		}
+
+		public void AddBreakpoint(BreakpointType type, ulong addr) => throw new NotImplementedException();
+		public void RemoveBreakpoint(BreakpointType type, ulong addr) => throw new NotImplementedException();
+
+		bool WasSingleStepping = false;
+		public void SingleStep(uint? threadId = null) {
+			if(!WasSingleStepping) {
+				WasSingleStepping = true;
+				Cpu[HvReg.RFLAGS] |= 0x0100;
+			}
+
+			Enter();
+		}
+
+		public void Continue(uint? threadId = null) {
+			if(WasSingleStepping) {
+				WasSingleStepping = false;
+				Cpu[HvReg.RFLAGS] &= 0xFFFFFEFF;
+			}
+			Enter();
+		}
+
+		public void BreakIn() => throw new NotImplementedException();
 	}
 }
