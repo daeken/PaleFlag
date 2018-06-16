@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Reflection.Metadata;
 using static System.Console;
+using static PaleFlag.Globals;
 
 namespace PaleFlag.XboxKernel {
 	[Flags]
@@ -65,9 +67,51 @@ namespace PaleFlag.XboxKernel {
 			FileOptions createOptions
 		) {
 			var fn = objectAttributes.ObjectName.Value.GetString();
-			WriteLine($"Filename '{fn}' accessMask:{accessMask} createDisposition:{createDisposition} createOptions:{createOptions}");
-			fileHandle = 0xDEADBEEF;
+			fileHandle = Box.Vfs.Open(fn).Handle;
 			ioStatusBlock = new IoStatusBlock();
+			return NtStatus.Success;
+		}
+
+		[Export(0xC4)]
+		NtStatus NtDeviceIoControlFile(
+			uint fileHandle, 
+			uint eventHandle, 
+			uint apcRoutine, 
+			uint apcContext, 
+			out IoStatusBlock ioStatusBlock, 
+			uint ioControlCode, 
+			GuestMemory<byte> inputBuffer, 
+			uint inputBufferLength, 
+			GuestMemory<byte> outputBuffer, 
+			uint outputBufferLength
+		) {
+			var device = Box.HandleManager.Get<IFileHandle>(fileHandle);
+
+			var ibuf = new byte[inputBuffer.GuestAddr == 0 ? 0 : inputBufferLength];
+			var obuf = new byte[outputBuffer.GuestAddr == 0 ? 0 : outputBufferLength];
+
+			for(var i = 0; i < ibuf.Length; ++i)
+				ibuf[i] = inputBuffer[i];
+			
+			WriteLine($"Ioctl {ioControlCode:X08} to {device.Name}");
+			HexDump(ibuf);
+			
+			var ret = device.Ioctl(ioControlCode, ibuf, obuf);
+			
+			WriteLine($"Ioctl ({ret}) out:");
+			HexDump(obuf);
+
+			for(var i = 0; i < obuf.Length; ++i)
+				outputBuffer[i] = obuf[i];
+			
+			ioStatusBlock = new IoStatusBlock();
+
+			return ret;
+		}
+
+		[Export(0x5B)]
+		NtStatus IoDismountVolumeByName(in AnsiString name) {
+			WriteLine($"Attempting to dismount '{name.GetString()}'");
 			return NtStatus.Success;
 		}
 	}

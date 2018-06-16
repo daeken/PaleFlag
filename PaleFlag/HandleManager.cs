@@ -7,8 +7,10 @@ namespace PaleFlag {
 	}
 	
 	public class HandleManager {
-		public uint HandleIter;
-		public readonly Dictionary<uint, IHandle> Handles = new Dictionary<uint,IHandle>();
+		uint HandleIter;
+		readonly Dictionary<uint, IHandle> Handles = new Dictionary<uint,IHandle>();
+
+		public T Get<T>(uint handle) where T : IHandle => (T) Handles[handle]; 
 
 		public uint Add(IHandle obj) {
 			lock(this) {
@@ -16,6 +18,11 @@ namespace PaleFlag {
 				obj.Handle = HandleIter;
 				return HandleIter;
 			}
+		}
+
+		public T Register<T>(T obj) where T : IHandle {
+			Add(obj);
+			return obj;
 		}
 
 		public void Close(uint handle) {

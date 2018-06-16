@@ -69,5 +69,8 @@ namespace PaleFlag.XboxKernel {
 		void KeQuerySystemTime(out long time) {
 			time = DateTime.UtcNow.Ticks;
 		}
+
+		[Export(0x25)]
+		NtStatus FscSetCacheSize(uint cachePages) => NtStatus.Success;
 	}
 }

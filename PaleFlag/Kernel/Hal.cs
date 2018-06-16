@@ -11,5 +11,11 @@ namespace PaleFlag.XboxKernel {
 		[Export(0x2F)]
 		void HalRegisterShutdownNotification(uint shutdownRegistration, bool register) {
 		}
+
+		[Export(0x09)]
+		void HalReadSMCTrayState(GuestMemory<uint> count, out uint state) {
+			if(count) count.Value = 1;
+			state = 16; // Tray open
+		}
 	}
 }

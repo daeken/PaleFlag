@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 using HypervisorSharp;
+using PaleFlag.Devices;
 using PaleFlag.XboxKernel;
 using static System.Console;
 using static PaleFlag.Globals;
@@ -15,6 +16,7 @@ namespace PaleFlag {
 		public readonly HandleManager HandleManager = new HandleManager();
 		public readonly ThreadManager ThreadManager;
 		public readonly MemoryAllocator MemoryAllocator;
+		public readonly Vfs Vfs;
 
 		public readonly (uint TlsStart, uint TlsEnd, uint TlsZerofill, uint TlsIndexAddr) Tls;
 		
@@ -24,6 +26,9 @@ namespace PaleFlag {
 			ThreadManager = new ThreadManager(this);
 			MemoryAllocator = new MemoryAllocator(this);
 			PageManager = new PageManager(Cpu);
+
+			Vfs = new Vfs(this);
+			SetupVfs();
 
 			var xbe = new Xbe(fn);
 			var (ep, tlsStart, tlsEnd, tlsZerofill, tlsIndexAddr) = xbe.Load(Cpu);
@@ -37,6 +42,10 @@ namespace PaleFlag {
 			guest<ushort>(0x6f5e7).Value = 0xfeeb;
 
 			//Cpu.SetupDebugger();
+		}
+
+		void SetupVfs() {
+			Vfs.AddDeviceFile("CDROM0:", new CdromDeviceFile());
 		}
 
 		void SetupHack() {

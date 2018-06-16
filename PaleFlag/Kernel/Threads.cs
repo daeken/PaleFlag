@@ -57,5 +57,47 @@ namespace PaleFlag.XboxKernel {
 		NtStatus RtlLeaveCriticalSection(ref RtlCriticalSection crit) {
 			return NtStatus.Success;
 		}
+		
+		struct Kevent {
+			public DispatcherHeader Header;
+		}
+
+		struct Ksemaphore {
+			public DispatcherHeader Header;
+			public int Limit;
+		}
+
+		struct ErwLock {
+			public int LockCount;
+			public uint WritersWaitingCount, ReadersWaitingCount, ReadersEntryCount;
+			public Kevent WriterEvent;
+			public Ksemaphore ReaderSemaphore;
+		}
+
+		[Export(0x12)]
+		void ExInitializeReadWriteLock(out ErwLock elock) {
+			elock = new ErwLock {
+				LockCount = -1, 
+				WritersWaitingCount = 0, 
+				ReadersWaitingCount = 0, 
+				ReadersEntryCount = 0
+			};
+			KeInitializeEvent(out elock.WriterEvent, EventType.Synchronization, false);
+		}
+
+		enum EventType {
+			Notification, 
+			Synchronization
+		}
+
+		[Export(0x6C)]
+		void KeInitializeEvent(out Kevent evt, EventType type, bool signalState) {
+			evt = new Kevent {
+				Header = new DispatcherHeader {
+					Size = (byte) (Extensions.SizeOf(typeof(Kevent)) / 4), 
+					SignalState = signalState ? 1 : 0
+				}
+			};
+		}
 	}
 }
