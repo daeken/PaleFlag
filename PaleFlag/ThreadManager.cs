@@ -10,6 +10,8 @@ namespace PaleFlag {
 		//public ushort Cs = 1 << 3, Ss = 2 << 3, Ds = 2 << 3, Es = 2 << 3, Fs = 2 << 3, Gs = 2 << 3;
 		public uint Tib;
 
+		public uint Handle { get; set; }
+		
 		public void Close() {
 		}
 	}

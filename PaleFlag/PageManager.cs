@@ -119,10 +119,14 @@ namespace PaleFlag {
 
 		public byte[] Read(uint vaddr, int size) {
 			var data = new byte[size];
+			Read(vaddr, data);
+			return data;
+		}
 
+		public void Read(uint vaddr, byte[] data) {
 			var prevPage = 0xFFFFFFFFU;
 			var physPage = 0U;
-			for(var i = 0U; i < size; ++i) {
+			for(var i = 0U; i < data.Length; ++i) {
 				var page = (vaddr + i) & 0xFFFFF000U;
 				if(page != prevPage) {
 					prevPage = page;
@@ -130,8 +134,6 @@ namespace PaleFlag {
 				}
 				data[i] = ReadPhys(physPage + (vaddr + i - page));
 			}
-
-			return data;
 		}
 
 		public T Read<T>(uint vaddr) {
@@ -149,10 +151,14 @@ namespace PaleFlag {
 			var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
 			Marshal.StructureToPtr(value, handle.AddrOfPinnedObject(), true);
 			handle.Free();
+			
+			Write(vaddr, data);
+		}
 
+		public void Write(uint vaddr, byte[] data) {
 			var prevPage = 0xFFFFFFFFU;
 			var physPage = 0U;
-			for(var i = 0U; i < size; ++i) {
+			for(var i = 0U; i < data.Length; ++i) {
 				var page = (vaddr + i) & 0xFFFFF000U;
 				if(page != prevPage) {
 					prevPage = page;

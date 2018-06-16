@@ -63,7 +63,7 @@ namespace PaleFlag {
 			Cpu[HvVmcsField.GUEST_LDTR_AR] = 0x10000;
 			Cpu[HvVmcsField.GUEST_TR_AR] = 0x83;
 			
-			Cpu[HvReg.CR4] = 0x2000;
+			Cpu[HvReg.CR4] = 0x2000 | 0x400 | 0x200;
 
 			PagetableBase = Hv.Map(PagetableAddr, 4 * 1024 * 1024 + 4 * 1024, HvMemoryFlags.RWX);
 			
@@ -89,7 +89,7 @@ namespace PaleFlag {
 			}
 
 			Cpu[HvReg.CR3] = PagetableAddr;
-			Cpu[HvReg.CR0] = 0x80000000 | 0x20 | 0x01;
+			Cpu[HvReg.CR0] = 0x80000000 | 0x20 | 0x02 | 0x01;
 		}
 
 		public byte* CreatePhysicalPages(uint addr, int count) {

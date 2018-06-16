@@ -14,8 +14,8 @@ namespace PaleFlag.XboxKernel {
 		}
 		
 		[Export(0x6B)]
-		void KeInitializeDpc(GuestMemory<Kdpc> dpc, uint deferredRoutine, uint deferredContext) {
-			dpc.Value = new Kdpc {
+		void KeInitializeDpc(out Kdpc dpc, uint deferredRoutine, uint deferredContext) {
+			dpc = new Kdpc {
 				Number = 0, 
 				Type = (byte) Kobject.DpcObject, 
 				DeferredRoutine = deferredRoutine, 

@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System;
+using System.Runtime.InteropServices;
 
 namespace PaleFlag.XboxKernel {
 	public partial class Kernel {
@@ -62,6 +63,11 @@ namespace PaleFlag.XboxKernel {
 			if(resultLength)
 				resultLength.Value = 4;
 			return NtStatus.Success;
+		}
+
+		[Export(0x80)]
+		void KeQuerySystemTime(out long time) {
+			time = DateTime.UtcNow.Ticks;
 		}
 	}
 }

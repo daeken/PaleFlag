@@ -16,26 +16,23 @@ namespace PaleFlag.XboxKernel {
 		}
 
 		[Export(0xB8)]
-		NtStatus NtAllocateVirtualMemory(GuestMemory<uint> baseAddress, GuestMemory<uint> zeroBits,
-			GuestMemory<uint> regionSize, AllocationType allocationType, uint protect) {
-			var addr = baseAddress.Value &= 0xFFFFF000;
-			var size = regionSize.Value;
-			if((size & 0xFFF) != 0) size = (size & 0xFFFFF000) + 4096;
-			regionSize.Value = size;
-			Console.WriteLine($"Allocating 0x{size:X} bytes at {addr:X} ({allocationType})");
-
+		NtStatus NtAllocateVirtualMemory(ref uint baseAddress, GuestMemory<uint> zeroBits,
+			ref uint regionSize, AllocationType allocationType, uint protect) {
+			baseAddress &= 0xFFFFF000;
+			if((regionSize & 0xFFF) != 0) regionSize = (regionSize & 0xFFFFF000) + 4096;
+			Console.WriteLine($"Allocating 0x{regionSize:X} bytes at {baseAddress:X} ({allocationType})");
+			
 			if(allocationType.HasFlag(AllocationType.Commit) || allocationType.HasFlag(AllocationType.Reserve)) {
-				if(addr == 0)
-					baseAddress.Value = Box.MemoryAllocator.Allocate(size / 4096);
-				else {
-					if(Box.Cpu.IsMapped(addr))
-						return NtStatus.Success;
-					var virt = Box.PageManager.AllocVirtPages((int) size / 4096, at: addr);
-					var phys = Box.PageManager.AllocPhysPages((int) size / 4096);
-					Box.Cpu.MapPages(virt, phys, (int) size / 4096, true);
-				}
+				if(baseAddress != 0 && Box.Cpu.IsMapped(baseAddress))
+					return NtStatus.Success;
+				var virt = Box.PageManager.AllocVirtPages((int) regionSize / 4096, at: baseAddress != 0 ? (uint?) baseAddress : null);
+				var phys = Box.PageManager.AllocPhysPages((int) regionSize / 4096);
+				Box.Cpu.MapPages(virt, phys, (int) regionSize / 4096, true);
+				baseAddress = virt;
 			} else
 				throw new Exception($"Unsupported allocation type {allocationType}");
+			
+			Console.WriteLine($"Output address is {baseAddress:X}");
 
 			return NtStatus.Success;
 		}

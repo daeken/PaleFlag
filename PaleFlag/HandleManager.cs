@@ -2,6 +2,7 @@
 
 namespace PaleFlag {
 	public interface IHandle {
+		uint Handle { get; set; }
 		void Close();
 	}
 	
@@ -12,6 +13,7 @@ namespace PaleFlag {
 		public uint Add(IHandle obj) {
 			lock(this) {
 				Handles[++HandleIter] = obj;
+				obj.Handle = HandleIter;
 				return HandleIter;
 			}
 		}
