@@ -114,5 +114,11 @@ namespace PaleFlag.XboxKernel {
 			WriteLine($"Attempting to dismount '{name.GetString()}'");
 			return NtStatus.Success;
 		}
+
+		[Export(0x43)]
+		NtStatus IoCreateSymbolicLink(in AnsiString symbolicLinkName, in AnsiString deviceName) {
+			WriteLine($"Making symbolic link from '{symbolicLinkName.GetString()}' -> '{deviceName.GetString()}'");
+			return NtStatus.Success;
+		}
 	}
 }

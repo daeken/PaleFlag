@@ -12,6 +12,16 @@ namespace PaleFlag.XboxKernel {
 		}
 	}
 	
+	public struct UnicodeString {
+		public ushort Length, MaxLength;
+		public GuestMemory<byte> Buffer;
+
+		public string GetString() {
+			var gm = Buffer;
+			return Encoding.Unicode.GetString(Enumerable.Range(0, Length).Select(i => gm[i]).ToArray());
+		}
+	}
+	
 	public partial class Kernel {
 		int PStrlen(GuestMemory<byte> gm) {
 			var len = 0;
