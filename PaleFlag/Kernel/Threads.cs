@@ -83,6 +83,7 @@ namespace PaleFlag.XboxKernel {
 				ReadersEntryCount = 0
 			};
 			KeInitializeEvent(out elock.WriterEvent, EventType.Synchronization, false);
+			// Initialize semaphore
 		}
 
 		enum EventType {
@@ -98,6 +99,7 @@ namespace PaleFlag.XboxKernel {
 					SignalState = signalState ? 1 : 0
 				}
 			};
+			// Should be initializing list
 		}
 	}
 }

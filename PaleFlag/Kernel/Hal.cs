@@ -17,5 +17,11 @@ namespace PaleFlag.XboxKernel {
 			if(count) count.Value = 1;
 			state = 16; // Tray open
 		}
+
+		[Export(0x2C)]
+		uint HalGetInterruptVector(uint busInterruptLevel, out byte irql) {
+			irql = 0;
+			return 0;
+		}
 	}
 }

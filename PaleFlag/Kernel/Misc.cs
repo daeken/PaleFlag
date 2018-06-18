@@ -72,5 +72,14 @@ namespace PaleFlag.XboxKernel {
 
 		[Export(0x25)]
 		NtStatus FscSetCacheSize(uint cachePages) => NtStatus.Success;
+
+		[Export(0x41)]
+		NtStatus IoCreateDevice(uint driverObject, uint deviceExtensionSize, GuestMemory<AnsiString> deviceName, uint deviceType, 
+			bool exclusive, out uint deviceObject
+		) {
+			deviceObject = Box.MemoryAllocator.Allocate(65536); // XXX: Bullshit
+			var gm = new GuestMemory<uint>(deviceObject + 0x18) { Value = deviceObject + 0x1000 };
+			return NtStatus.Success;
+		}
 	}
 }

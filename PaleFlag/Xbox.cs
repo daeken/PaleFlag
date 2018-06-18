@@ -8,7 +8,7 @@ using static PaleFlag.Globals;
 
 namespace PaleFlag {
 	public class Xbox {
-		public const uint KernelCallsBase = 0xFF000000U;
+		public const uint KernelCallsBase = 0xFC000000U;
 		
 		public readonly CpuCore Cpu;
 		public readonly Kernel Kernel;
@@ -28,8 +28,7 @@ namespace PaleFlag {
 			PageManager = new PageManager(Cpu);
 
 			Vfs = new Vfs(this);
-			SetupVfs();
-
+			
 			var xbe = new Xbe(fn);
 			var (ep, tlsStart, tlsEnd, tlsZerofill, tlsIndexAddr) = xbe.Load(Cpu);
 			Tls = (tlsStart, tlsEnd, tlsZerofill, tlsIndexAddr);
@@ -44,19 +43,15 @@ namespace PaleFlag {
 			//Cpu.SetupDebugger();
 		}
 
-		void SetupVfs() {
-			Vfs.AddDeviceFile("CDROM0:", new CdromDeviceFile());
-		}
-
 		void SetupHack() {
 			// Some XBEs appear to try to patch kernel stuff,
 			// but this hack is enough to terminate that safely
 
-			var phys = PageManager.AllocPhysPages(1);
-			var virt = PageManager.AllocVirtPages(1, at: 0x80010000);
-			Cpu.MapPages(virt, phys, 1, true);
+			var phys = PageManager.AllocPhysPages(17);
+			var virt = PageManager.AllocVirtPages(17, at: 0x80000000);
+			Cpu.MapPages(virt, phys, 17, true);
 
-			var hack = new GuestMemory<uint>(virt);
+			var hack = new GuestMemory<uint>(virt + 0x10000);
 			var hack2 = MemoryAllocator.Allocate(0x20);
 			hack[0x3c / 4] = unchecked(hack2 + 0x7FFF0000);
 		}
@@ -69,6 +64,7 @@ namespace PaleFlag {
 			WriteLine($"Launch data page at {launchDataPage:X}");
 			ptr[0xa4] = launchDataPage;
 			Cpu.MapPages(KernelCallsBase, KernelCallsBase, 1, true);
+			ptr[0x142] = 0xDEADBEEF; // XboxHardwareInfo
 		}
 
 		public void Start() {

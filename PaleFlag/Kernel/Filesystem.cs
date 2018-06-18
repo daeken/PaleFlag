@@ -67,7 +67,9 @@ namespace PaleFlag.XboxKernel {
 			FileOptions createOptions
 		) {
 			var fn = objectAttributes.ObjectName.Value.GetString();
-			fileHandle = Box.Vfs.Open(fn).Handle;
+			WriteLine($"NtCreateFile([{accessMask}], [{fn}], [{createDisposition}], [{createOptions}])");
+			var fileNode = createOptions.HasFlag(FileOptions.DirectoryFile) ? Box.Vfs.OpenDirectory(fn, createDisposition == CreateDisposition.Create || createDisposition == CreateDisposition.OpenIf) : Box.Vfs.OpenFile(fn);
+			fileHandle = fileNode.Handle;
 			ioStatusBlock = new IoStatusBlock();
 			return NtStatus.Success;
 		}
@@ -98,8 +100,8 @@ namespace PaleFlag.XboxKernel {
 			
 			var ret = device.Ioctl(ioControlCode, ibuf, obuf);
 			
-			WriteLine($"Ioctl ({ret}) out:");
-			HexDump(obuf);
+			//WriteLine($"Ioctl ({ret}) out:");
+			//HexDump(obuf);
 
 			for(var i = 0; i < obuf.Length; ++i)
 				outputBuffer[i] = obuf[i];
@@ -118,6 +120,39 @@ namespace PaleFlag.XboxKernel {
 		[Export(0x43)]
 		NtStatus IoCreateSymbolicLink(in AnsiString symbolicLinkName, in AnsiString deviceName) {
 			WriteLine($"Making symbolic link from '{symbolicLinkName.GetString()}' -> '{deviceName.GetString()}'");
+			Box.Vfs.CreateSymlink(symbolicLinkName.GetString(), deviceName.GetString());
+			return NtStatus.Success;
+		}
+
+		[Flags]
+		enum FileAttribute {
+			ReadOnly = 0x01, 
+			Hidden = 0x02, 
+			System = 0x04, 
+			Directory = 0x10, 
+			Archive = 0x20, 
+			Device = 0x40, 
+			Normal = 0x80, 
+			Temporary = 0x100, 
+			Sparse = 0x200, 
+			ReparsePoint = 0x400, 
+			Compressed = 0x800, 
+			Offline = 0x1000, 
+			NotContentIndexed = 0x2000, 
+			Encrypted = 0x4000
+		}
+		
+		struct FileNetworkOpenInformation {
+			public ulong CreationTime, LastAccessTime, LastWriteTime, ChangeTime, AllocationSize, EndOfFile;
+			public FileAttribute FileAttributes;
+		}
+
+		[Export(0xD2)]
+		NtStatus NtQueryFullAttributesFile(in ObjectAttributes objectAttributes, out FileNetworkOpenInformation info) {
+			WriteLine($"Getting full attributes for {objectAttributes.ObjectName.Value.GetString()}");
+			
+			info = new FileNetworkOpenInformation();
+			
 			return NtStatus.Success;
 		}
 	}

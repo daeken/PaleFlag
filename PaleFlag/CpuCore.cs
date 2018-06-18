@@ -142,7 +142,7 @@ namespace PaleFlag {
 
 		void Enter() {
 			while(true) {
-				WriteLine($"Entering {Cpu[HvReg.RIP]:X}");
+				//WriteLine($"Entering {Cpu[HvReg.RIP]:X}");
 
 				Cpu.Enter();
 
@@ -160,7 +160,8 @@ namespace PaleFlag {
 					continue;
 				var qual = (uint) Cpu[HvVmcsField.RO_EXIT_QUALIFIC];
 				var insnLen = (uint) Cpu[HvVmcsField.RO_VMEXIT_INSTR_LEN];
-				WriteLine($"Exited with {reason} at {Cpu[HvReg.RIP]:X}");
+				if(reason != HvExitReason.VMCALL)
+					WriteLine($"Exited with {reason} at {Cpu[HvReg.RIP]:X}");
 
 				switch(reason) {
 					case HvExitReason.EXC_NMI:
@@ -199,14 +200,18 @@ namespace PaleFlag {
 					case HvExitReason.EPT_VIOLATION:
 						break;
 					case HvExitReason.VMCALL:
+						var sp = (uint) Cpu[HvReg.RSP];
+						Cpu[HvReg.RSP] = sp + 4;
+						var retAddr = new GuestMemory<uint>(sp).Value;
 						var call = (int) (Cpu[HvReg.RIP] - Xbox.KernelCallsBase) / 4;
-						WriteLine($"Kernel call to {(KernelExportNames) call}");
+						WriteLine($"Kernel call to {(KernelExportNames) call} (returning to {retAddr:X})");
 						if(!Box.Kernel.Functions.ContainsKey(call)) {
 							WriteLine($"Unimplemented kernel function 0x{call:X} - {(KernelExportNames) call}");
 							Environment.Exit(0);
 						}
 
 						Box.Kernel.Functions[call]();
+						Cpu[HvReg.RIP] = retAddr;
 						break;
 				}
 			}

@@ -12,4 +12,10 @@ namespace PaleFlag.Devices {
 		public int Read(byte[] buf, int count) => throw new System.NotImplementedException();
 		public void Write(byte[] buf, int count) => throw new System.NotImplementedException();
 	}
+
+	public class CdromDeviceNode : VfsDeviceNode {
+		public CdromDeviceNode(string fullPath) : base(fullPath) {}
+
+		public override IFileHandle OpenFile() => new CdromDeviceFile();
+	}
 }
