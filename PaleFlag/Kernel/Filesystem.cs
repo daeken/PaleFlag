@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Reflection.Metadata;
 using static System.Console;
 using static PaleFlag.Globals;
@@ -54,6 +55,30 @@ namespace PaleFlag.XboxKernel {
 	}
 
 	public partial class Kernel {
+		[Export(0xCA)]
+		NtStatus NtOpenFile(
+			out uint fileHandle, 
+			AccessFlags desiredAccess, 
+			in ObjectAttributes objectAttributes, 
+			out IoStatusBlock ioStatusBlock, 
+			uint shareAccess, 
+			FileOptions openOptions
+		) {
+			var fn = objectAttributes.ObjectName.Value.GetString();
+			WriteLine($"NtOpenFile([{desiredAccess}], [{fn}], [{openOptions}])");
+			ioStatusBlock = new IoStatusBlock();
+			try {
+				var fileNode = openOptions.HasFlag(FileOptions.DirectoryFile)
+					? Box.Vfs.OpenDirectory(fn)
+					: Box.Vfs.OpenFile(fn);
+				fileHandle = fileNode.Handle;
+				return NtStatus.Success;
+			} catch(FileNotFoundException) {
+				fileHandle = 0;
+				return NtStatus.ObjectNameNotFound;
+			}
+		}
+		
 		[Export(0xBE)]
 		NtStatus NtCreateFile(
 			out uint fileHandle, 
@@ -68,10 +93,15 @@ namespace PaleFlag.XboxKernel {
 		) {
 			var fn = objectAttributes.ObjectName.Value.GetString();
 			WriteLine($"NtCreateFile([{accessMask}], [{fn}], [{createDisposition}], [{createOptions}])");
-			var fileNode = createOptions.HasFlag(FileOptions.DirectoryFile) ? Box.Vfs.OpenDirectory(fn, createDisposition == CreateDisposition.Create || createDisposition == CreateDisposition.OpenIf) : Box.Vfs.OpenFile(fn);
-			fileHandle = fileNode.Handle;
 			ioStatusBlock = new IoStatusBlock();
-			return NtStatus.Success;
+			try {
+				var fileNode = createOptions.HasFlag(FileOptions.DirectoryFile) ? Box.Vfs.OpenDirectory(fn, createDisposition == CreateDisposition.Create || createDisposition == CreateDisposition.OpenIf) : Box.Vfs.OpenFile(fn);
+				fileHandle = fileNode.Handle;
+				return NtStatus.Success;
+			} catch(FileNotFoundException) {
+				fileHandle = 0;
+				return NtStatus.ObjectNameNotFound;
+			}
 		}
 
 		[Export(0xC4)]

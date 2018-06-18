@@ -11,10 +11,12 @@ using static System.Console;
 namespace PaleFlag {
 	public unsafe class CpuCore : IDebugTarget {
 		const uint PagetableAddr = 0xF0000000;
+		const uint MmioPhysPage = 0xFD000000;
 		
 		readonly HvMac Hv = new HvMac();
 		readonly HvMacVcpu Cpu;
 		readonly byte* PagetableBase;
+		readonly byte* MmioPhysBase;
 
 		Gdb<CpuCore> Gdb;
 		readonly Xbox Box;
@@ -27,6 +29,16 @@ namespace PaleFlag {
 		public uint this[HvVmcsField field] {
 			get => (uint) Cpu[field];
 			set => Cpu[field] = value;
+		}
+
+		public bool SingleStepFlag {
+			get => (Cpu[HvReg.RFLAGS] & 0x0100) != 0;
+			set {
+				if(value)
+					Cpu[HvReg.RFLAGS] |= 0x0100;
+				else
+					Cpu[HvReg.RFLAGS] &= 0xFFFFFEFF;
+			}
 		}
 		
 		public CpuCore(Xbox box) {
@@ -66,6 +78,7 @@ namespace PaleFlag {
 			Cpu[HvReg.CR4] = 0x2000 | 0x400 | 0x200;
 
 			PagetableBase = Hv.Map(PagetableAddr, 4 * 1024 * 1024 + 4 * 1024, HvMemoryFlags.RWX);
+			MmioPhysBase = Hv.Map(MmioPhysPage, 4096, HvMemoryFlags.RWX);
 			
 			SetupPagetable();
 			
@@ -75,6 +88,8 @@ namespace PaleFlag {
 			SetSegment(HvVmcsField.GUEST_FS, HvVmcsField.GUEST_FS_AR, HvVmcsField.GUEST_FS_LIMIT, HvVmcsField.GUEST_FS_BASE);
 			SetSegment(HvVmcsField.GUEST_GS, HvVmcsField.GUEST_GS_AR, HvVmcsField.GUEST_GS_LIMIT, HvVmcsField.GUEST_GS_BASE);
 			SetSegment(HvVmcsField.GUEST_SS, HvVmcsField.GUEST_SS_AR, HvVmcsField.GUEST_SS_LIMIT, HvVmcsField.GUEST_SS_BASE);
+			
+			
 		}
 
 		public void SetupDebugger() => Gdb = new Gdb<CpuCore>(this, new IPEndPoint(IPAddress.Any, 12345));
@@ -140,6 +155,9 @@ namespace PaleFlag {
 				Gdb.Run();
 		}
 
+		uint? InMmio;
+		bool MmioWrite;
+
 		void Enter() {
 			while(true) {
 				//WriteLine($"Entering {Cpu[HvReg.RIP]:X}");
@@ -160,13 +178,14 @@ namespace PaleFlag {
 					continue;
 				var qual = (uint) Cpu[HvVmcsField.RO_EXIT_QUALIFIC];
 				var insnLen = (uint) Cpu[HvVmcsField.RO_VMEXIT_INSTR_LEN];
-				if(reason != HvExitReason.VMCALL)
-					WriteLine($"Exited with {reason} at {Cpu[HvReg.RIP]:X}");
+				//if(reason != HvExitReason.VMCALL)
+				//	WriteLine($"Exited with {reason} at {Cpu[HvReg.RIP]:X}");
 
 				switch(reason) {
 					case HvExitReason.EXC_NMI:
 						var vecVal = Cpu[HvVmcsField.RO_VMEXIT_IRQ_INFO] & 0xFFFFU;
 						var errorCode = Cpu[HvVmcsField.RO_VMEXIT_IRQ_ERROR];
+						var cont = false;
 						switch((vecVal >> 8) & 7) {
 							case 6:
 								var interrupt = vecVal & 0xFF;
@@ -178,15 +197,49 @@ namespace PaleFlag {
 								break;
 							case 3:
 								var exc = vecVal & 0xFF;
-								WriteLine($"Exception {exc}");
-								if(exc == 1 && Gdb != null) {
-									Trapped?.Invoke(TrapType.SingleStep);
+								switch(exc) {
+									case 1 when InMmio != null:
+										var mpage = InMmio.Value & 0xFFFFF000;
+										MapPages(mpage, MmioPhysPage, 1, false);
+										var mptr = (uint*) (MmioPhysBase + (InMmio.Value - mpage));
+										if(MmioWrite)
+											Box.MmioManager.Write(InMmio.Value, *mptr);
+										InMmio = null;
+										cont = true;
+										SingleStepFlag = false;
+										break;
+									case 1 when Gdb != null:
+										Trapped?.Invoke(TrapType.SingleStep);
+										return;
+									case 14:
+										var isWrite = (errorCode & 2) == 2;
+										if(qual >= 0xFD000000) {
+											InMmio = qual;
+											var page = qual & 0xFFFFF000;
+											MapPages(page, MmioPhysPage, 1, true);
+											if(isWrite)
+												MmioWrite = true;
+											else {
+												MmioWrite = false;
+												var ret = Box.MmioManager.Read(qual);
+												var ptr = (uint*) (MmioPhysBase + (qual - page));
+												ptr[0] = ret;
+											}
+
+											SingleStepFlag = true;
+											cont = true;
+										} else
+											WriteLine($"Invalid {(isWrite ? "write" : "read")} from {qual:X}");
+
+										break;
 								}
 								break;
 							default:
 								WriteLine($"Unknown NMI {vecVal:X}");
 								break;
 						}
+
+						if(cont) break;
 
 						DumpRegs();
 
@@ -265,11 +318,11 @@ namespace PaleFlag {
 		public void AddBreakpoint(BreakpointType type, ulong addr) => throw new NotImplementedException();
 		public void RemoveBreakpoint(BreakpointType type, ulong addr) => throw new NotImplementedException();
 
-		bool WasSingleStepping = false;
+		bool WasSingleStepping;
 		public void SingleStep(uint? threadId = null) {
 			if(!WasSingleStepping) {
 				WasSingleStepping = true;
-				Cpu[HvReg.RFLAGS] |= 0x0100;
+				SingleStepFlag = true;
 			}
 
 			Enter();
@@ -278,7 +331,7 @@ namespace PaleFlag {
 		public void Continue(uint? threadId = null) {
 			if(WasSingleStepping) {
 				WasSingleStepping = false;
-				Cpu[HvReg.RFLAGS] &= 0xFFFFFEFF;
+				SingleStepFlag = false;
 			}
 			Enter();
 		}

@@ -3,7 +3,8 @@
 namespace PaleFlag.XboxKernel {
 	public enum NtStatus : uint {
 		Success = 0, 
-		NoMediaInDevice = 0xC0000013
+		NoMediaInDevice = 0xC0000013, 
+		ObjectNameNotFound = 0xC0000034
 	}
 
 	public partial class Kernel {

@@ -35,7 +35,7 @@ namespace GdbStub {
 		string CalculateChecksum(string cmd) => $"{cmd.Select(x => (byte) x).Aggregate((a, x) => unchecked((byte) (a + x))):x2}";
 
 		void Reply(string resp) {
-			Error.WriteLine($"Replying with: '{resp}'");
+			//Error.WriteLine($"Replying with: '{resp}'");
 			Client.Write(Encoding.ASCII.GetBytes($"${resp}#{CalculateChecksum(resp)}"));
 		}
 
@@ -56,7 +56,7 @@ namespace GdbStub {
 		}
 
 		void ProcessCommand(string cmd) {
-			Error.WriteLine($"Got command: '{cmd}'");
+			//Error.WriteLine($"Got command: '{cmd}'");
 			var sc = new StringChunker(cmd);
 
 			switch(sc.ReadChar()) {
@@ -67,7 +67,7 @@ namespace GdbStub {
 					switch(sc.ReadUntil(':', required: false)) {
 						case "Supported":
 							var features = sc.ReadToEnd().Split(';');
-							Error.WriteLine($"Client supports: {string.Join(", ", features)}");
+							//Error.WriteLine($"Client supports: {string.Join(", ", features)}");
 							Reply("PacketSize=10000");
 							break;
 						case "C":
@@ -88,7 +88,7 @@ namespace GdbStub {
 					switch(sc.ReadChar()) {
 						case 'g': // Set thread
 							var t = sc.ParseHexUint(sc.ReadToEnd());
-							Error.WriteLine($"[Fake] Setting thread to {t}");
+							//Error.WriteLine($"[Fake] Setting thread to {t}");
 							Reply("OK");
 							break;
 						case 'c': // Continue
@@ -124,7 +124,7 @@ namespace GdbStub {
 						break;
 					}
 					var name = Target.Registers.NumberToName[rnum];
-					Error.WriteLine($"Attempting to read register {name}");
+					//Error.WriteLine($"Attempting to read register {name}");
 					Reply(Hex(Target[name]));
 					break;
 				case 'g':

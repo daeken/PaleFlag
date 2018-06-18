@@ -16,16 +16,18 @@ namespace PaleFlag {
 		public readonly HandleManager HandleManager = new HandleManager();
 		public readonly ThreadManager ThreadManager;
 		public readonly MemoryAllocator MemoryAllocator;
+		public readonly MmioManager MmioManager;
 		public readonly Vfs Vfs;
 
 		public readonly (uint TlsStart, uint TlsEnd, uint TlsZerofill, uint TlsIndexAddr) Tls;
 		
-		public Xbox(string fn) {
+		public Xbox(string fn, bool debug) {
 			Cpu = new CpuCore(this);
 			Kernel = new Kernel(this);
 			ThreadManager = new ThreadManager(this);
 			MemoryAllocator = new MemoryAllocator(this);
 			PageManager = new PageManager(Cpu);
+			MmioManager = new MmioManager();
 
 			Vfs = new Vfs(this);
 			
@@ -40,7 +42,8 @@ namespace PaleFlag {
 			
 			guest<ushort>(0x6f5e7).Value = 0xfeeb;
 
-			//Cpu.SetupDebugger();
+			if(debug)
+				Cpu.SetupDebugger();
 		}
 
 		void SetupHack() {
@@ -65,6 +68,19 @@ namespace PaleFlag {
 			ptr[0xa4] = launchDataPage;
 			Cpu.MapPages(KernelCallsBase, KernelCallsBase, 1, true);
 			ptr[0x142] = 0xDEADBEEF; // XboxHardwareInfo
+			var imageName = "xboxdash.xbe";
+			// XXX: this should be 0x146.  Wtf? 0002CA8B in dash
+			ptr[0x147] = MemoryAllocator.Allocate((uint) Extensions.SizeOf(typeof(AnsiString)) + (uint) imageName.Length + 1); // XeImageFileName
+			var str = new GuestMemory<AnsiString>(ptr[0x147]);
+			str.Value = new AnsiString {
+				Buffer = ptr[0x147] + (uint) Extensions.SizeOf(typeof(AnsiString)), 
+				Length = (ushort) imageName.Length, 
+				MaxLength = (ushort) (imageName.Length + 1)
+			};
+			var gm = new GuestMemory<byte>(str.Value.Buffer);
+			for(var i = 0; i < imageName.Length; ++i)
+				gm[i] = (byte) imageName[i];
+			gm[imageName.Length] = 0;
 		}
 
 		public void Start() {

@@ -56,12 +56,9 @@ namespace PaleFlag.XboxKernel {
 
 		[Export(0x18)]
 		NtStatus ExQueryNonVolatileSetting(uint valueIndex, GuestMemory<uint> type, GuestMemory<uint> value, uint valueLength, GuestMemory<uint> resultLength) {
-			if(type)
-				type.Value = 4;
-			if(value)
-				value.Value = 0;
-			if(resultLength)
-				resultLength.Value = 4;
+			if(type) type.Value = 4;
+			if(value) value.Value = 0;
+			if(resultLength) resultLength.Value = 4;
 			return NtStatus.Success;
 		}
 
@@ -80,6 +77,11 @@ namespace PaleFlag.XboxKernel {
 			deviceObject = Box.MemoryAllocator.Allocate(65536); // XXX: Bullshit
 			var gm = new GuestMemory<uint>(deviceObject + 0x18) { Value = deviceObject + 0x1000 };
 			return NtStatus.Success;
+		}
+
+		[Export(0x97)]
+		void KeStallExecutionProcessor(uint microSeconds) {
+			System.Threading.Thread.Sleep((int) (microSeconds / 1000) + 1);
 		}
 	}
 }
